@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Cache files
+.cache_performance_*.pkl
+
+# Data files (generated - exclude large CSVs)
+*.csv
+db_markets.csv
+db_trades.csv
+db_trades_*.csv
+output_picks_*.csv
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Large data files (generated)
+db_*.csv
+output_*.csv
+
+# Excel files (generated leaderboards)
+*.xlsx
+
+# Claude Code
+.claude/
