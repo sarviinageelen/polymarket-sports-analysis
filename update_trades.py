@@ -1258,7 +1258,7 @@ def calculate_pnl_for_all_users(
         print()  # New line after progress
     
     # Compact completion message
-    status = f"✓ {successful:,} users | {format_time(elapsed_time)}"
+    status = f"[OK] {successful:,} users | {format_time(elapsed_time)}"
     if failed > 0:
         status += f" | {failed} failed"
     print(f"  {status}")
@@ -1377,7 +1377,9 @@ def process_all_markets(
     else:
         processed_markets = get_processed_markets(output_csv)
 
-    # Find markets that need re-processing (were unresolved, now resolved)
+    # Find markets that need re-processing:
+    # 1. Markets that were unresolved before but are now resolved
+    # 2. ALL unresolved markets (to capture new users who placed bets since last run)
     markets_to_reprocess = []
     for _, market in filtered_markets.iterrows():
         cid = market['condition_id']
@@ -1387,10 +1389,13 @@ def process_all_markets(
             # Re-process if it was unresolved before but is resolved now
             if not was_resolved and is_now_resolved:
                 markets_to_reprocess.append(cid)
+            # Also re-process if it's STILL unresolved (to capture new bets)
+            elif not is_now_resolved:
+                markets_to_reprocess.append(cid)
 
     # Remove old rows for markets that need re-processing
     if markets_to_reprocess and os.path.isfile(output_csv):
-        print(f"Re-processing {len(markets_to_reprocess)} newly resolved markets...")
+        print(f"Re-processing {len(markets_to_reprocess)} markets (unresolved + newly resolved)...")
         df_existing = pd.read_csv(output_csv)
         df_existing = df_existing[~df_existing['condition_id'].isin(markets_to_reprocess)]
         df_existing.to_csv(output_csv, index=False)
@@ -1418,7 +1423,7 @@ def process_all_markets(
     print(f"\n{'='*50}")
     print(f"Processing {total_to_process} {filter_desc} markets ({len(processed_markets)} already done)")
     if reprocess_count > 0:
-        print(f"  (includes {reprocess_count} newly resolved markets)")
+        print(f"  (includes {reprocess_count} re-processed markets for new bets)")
     print(f"  Resolved: {resolved_count} | Unresolved: {unresolved_count}")
     print(f"{'='*50}")
 
@@ -1490,7 +1495,7 @@ def process_all_markets(
 
     # Final summary
     print(f"\n{'='*50}")
-    print(f"✓ Done: {processed} markets | {total_users_processed:,} users | {format_time(elapsed_time)}")
+    print(f"[OK] Done: {processed} markets | {total_users_processed:,} users | {format_time(elapsed_time)}")
     if failed > 0:
         print(f"  Failed: {failed} markets")
     print(f"{'='*50}")
