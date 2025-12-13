@@ -58,6 +58,7 @@ import os
 import time
 import logging
 import pandas as pd
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
@@ -1306,7 +1307,8 @@ def process_all_markets(
     verbose: bool = False,
     max_users_per_market: Optional[int] = None,
     force_reprocess: bool = False,
-    market_filter: str = "all"
+    market_filter: str = "all",
+    sport_filter: str = "all"
 ):
     """
     Process markets and calculate PNL for every user.
@@ -1354,6 +1356,13 @@ def process_all_markets(
     
     # Read markets CSV
     markets_df = pd.read_csv(markets_csv)
+
+    # Filter by sport if specified
+    if sport_filter != "all":
+        markets_df = markets_df[markets_df['sport'].str.lower() == sport_filter].copy()
+        if len(markets_df) == 0:
+            print(f"No {sport_filter.upper()} markets found.")
+            return
 
     # Filter markets based on market_filter parameter
     if market_filter == "resolved":
@@ -1506,6 +1515,45 @@ def process_all_markets(
     print()
 
 
+# =============================================================================
+# Interactive Menu Functions
+# =============================================================================
+
+def select_sport() -> Optional[str]:
+    """Display sport selection menu and return selected sport."""
+    print("=" * 50)
+    print("Trade PNL Calculator")
+    print("=" * 50)
+    print()
+    print("Select sport:")
+    print("  1. All sports")
+    print("  2. NFL")
+    print("  3. NBA")
+    print("  4. CFB")
+    print("  5. CBB")
+    print()
+
+    choice = input("Enter choice (1-5): ").strip()
+
+    sport_map = {"1": "all", "2": "nfl", "3": "nba", "4": "cfb", "5": "cbb"}
+    return sport_map.get(choice)
+
+
+def select_resolution_status() -> Optional[str]:
+    """Display resolution status menu and return filter type."""
+    print()
+    print("Select market status:")
+    print("  1. All markets")
+    print("  2. Resolved only")
+    print("  3. Unresolved only")
+    print()
+
+    choice = input("Enter choice (1-3): ").strip()
+
+    status_map = {"1": "all", "2": "resolved", "3": "unresolved"}
+    return status_map.get(choice)
+
+
 def segment_trades_by_sport(trades_csv: str = "db_trades.csv"):
     """
     Segment trades CSV into separate files by sport.
@@ -1547,58 +1595,85 @@ def segment_trades_by_sport(trades_csv: str = "db_trades.csv"):
 
 
 if __name__ == "__main__":
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(
-        description="Calculate PNL for users in Polymarket sports markets"
-    )
-    parser.add_argument(
-        "--resolved-only",
-        action="store_true",
-        help="Only process resolved markets"
-    )
-    parser.add_argument(
-        "--unresolved-only",
-        action="store_true",
-        help="Only process unresolved markets"
-    )
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Print detailed output per user"
-    )
-    parser.add_argument(
-        "--force-reprocess",
-        action="store_true",
-        help="Delete existing output and reprocess everything"
-    )
-    parser.add_argument(
-        "--max-users",
-        type=int,
-        default=None,
-        help="Limit users per market (for testing)"
-    )
-
-    args = parser.parse_args()
-
-    # Determine market filter based on flags
-    if args.resolved_only and args.unresolved_only:
-        print("Error: Cannot use both --resolved-only and --unresolved-only")
-        exit(1)
-    elif args.resolved_only:
-        market_filter = "resolved"
-    elif args.unresolved_only:
-        market_filter = "unresolved"
-    else:
-        market_filter = "all"  # Default: process all markets
-
-    try:
-        process_all_markets(
-            verbose=args.verbose,
-            max_users_per_market=args.max_users,
-            force_reprocess=args.force_reprocess,
-            market_filter=market_filter
+    # Check if any command-line args provided
+    if len(sys.argv) > 1:
+        # CLI mode: Parse command-line arguments
+        parser = argparse.ArgumentParser(
+            description="Calculate PNL for users in Polymarket sports markets"
         )
-    except Exception as e:
-        print(f"\nError: {e}")
-        import traceback
-        traceback.print_exc()
+        parser.add_argument(
+            "--resolved-only",
+            action="store_true",
+            help="Only process resolved markets"
+        )
+        parser.add_argument(
+            "--unresolved-only",
+            action="store_true",
+            help="Only process unresolved markets"
+        )
+        parser.add_argument(
+            "--verbose", "-v",
+            action="store_true",
+            help="Print detailed output per user"
+        )
+        parser.add_argument(
+            "--force-reprocess",
+            action="store_true",
+            help="Delete existing output and reprocess everything"
+        )
+        parser.add_argument(
+            "--max-users",
+            type=int,
+            default=None,
+            help="Limit users per market (for testing)"
+        )
+
+        args = parser.parse_args()
+
+        # Determine market filter based on flags
+        if args.resolved_only and args.unresolved_only:
+            print("Error: Cannot use both --resolved-only and --unresolved-only")
+            exit(1)
+        elif args.resolved_only:
+            market_filter = "resolved"
+        elif args.unresolved_only:
+            market_filter = "unresolved"
+        else:
+            market_filter = "all"  # Default: process all markets
+
+        try:
+            process_all_markets(
+                verbose=args.verbose,
+                max_users_per_market=args.max_users,
+                force_reprocess=args.force_reprocess,
+                market_filter=market_filter
+            )
+        except Exception as e:
+            print(f"\nError: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        # Interactive menu mode
+        sport = select_sport()
+        if not sport:
+            print("Invalid choice")
+            exit(1)
+
+        status = select_resolution_status()
+        if not status:
+            print("Invalid choice")
+            exit(1)
+
+        sport_display = "All sports" if sport == "all" else sport.upper()
+        print(f"\nProcessing {sport_display} markets ({status})...")
+
+        try:
+            process_all_markets(
+                verbose=False,
+                market_filter=status,
+                sport_filter=sport
+            )
+        except Exception as e:
+            print(f"\nError: {e}")
+            import traceback
+            traceback.print_exc()
