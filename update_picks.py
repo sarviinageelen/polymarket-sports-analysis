@@ -741,9 +741,14 @@ def select_sport() -> Optional[str]:
     print("  2. NBA")
     print("  3. CFB")
     print("  4. CBB")
+    print("  0. Exit")
     print()
 
-    choice = input("Enter choice (1-4): ").strip()
+    choice = input("Enter choice (0-4): ").strip()
+
+    if choice == "0":
+        print("Exiting.")
+        return None
 
     sport_map = {"1": "NFL", "2": "NBA", "3": "CFB", "4": "CBB"}
     sport = sport_map.get(choice)
@@ -783,9 +788,14 @@ def select_time_period(sport: str) -> Tuple[Optional[List[int]], bool]:
     if last5:
         print(f"  3. Last 5 weeks (Weeks {min(last5)}-{max(last5)})")
     print(f"  4. Whole season")
+    print("  0. Exit")
     print()
 
-    choice = input("Enter choice (1-4): ").strip()
+    choice = input("Enter choice (0-4): ").strip()
+
+    if choice == "0":
+        print("Exiting.")
+        return None, False
 
     if choice == "1":
         weeks = [current]

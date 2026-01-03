@@ -1531,9 +1531,13 @@ def select_sport() -> Optional[str]:
     print("  3. NBA")
     print("  4. CFB")
     print("  5. CBB")
+    print("  0. Exit")
     print()
 
-    choice = input("Enter choice (1-5): ").strip()
+    choice = input("Enter choice (0-5): ").strip()
+
+    if choice == "0":
+        return "exit"
 
     sport_map = {"1": "all", "2": "nfl", "3": "nba", "4": "cfb", "5": "cbb"}
     return sport_map.get(choice)
@@ -1546,9 +1550,13 @@ def select_resolution_status() -> Optional[str]:
     print("  1. All markets")
     print("  2. Resolved only")
     print("  3. Unresolved only")
+    print("  0. Exit")
     print()
 
-    choice = input("Enter choice (1-3): ").strip()
+    choice = input("Enter choice (0-3): ").strip()
+
+    if choice == "0":
+        return "exit"
 
     status_map = {"1": "all", "2": "resolved", "3": "unresolved"}
     return status_map.get(choice)
@@ -1655,11 +1663,17 @@ if __name__ == "__main__":
     else:
         # Interactive menu mode
         sport = select_sport()
+        if sport == "exit":
+            print("Exiting.")
+            exit(0)
         if not sport:
             print("Invalid choice")
             exit(1)
 
         status = select_resolution_status()
+        if status == "exit":
+            print("Exiting.")
+            exit(0)
         if not status:
             print("Invalid choice")
             exit(1)
