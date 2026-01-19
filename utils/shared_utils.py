@@ -6,6 +6,7 @@ shared across update_picks.py and update_analyze.py.
 """
 
 import os
+import re
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
@@ -21,25 +22,25 @@ OUTPUT_DIR = "."
 SPORTS_CONFIG = {
     "NFL": {
         "input_csv": "db_trades_nfl.csv",
-        "season_start": datetime(2025, 9, 3),   # 2025 season, Week 1 starts Thu Sep 4
+        "season_start": datetime(2025, 9, 4),   # 2025 season, Week 1 starts Thu Sep 4
         "total_weeks": 18,
         "season_year": 2025,
     },
     "NBA": {
         "input_csv": "db_trades_nba.csv",
-        "season_start": datetime(2025, 10, 21), # 2025-26 season starts late Oct
+        "season_start": datetime(2025, 10, 22), # 2025-26 season starts Wed Oct 22
         "total_weeks": 26,                       # ~26 weeks regular season
         "season_year": 2026,
     },
     "CFB": {
         "input_csv": "db_trades_cfb.csv",
-        "season_start": datetime(2025, 8, 23),  # 2025 season, Week 0 late August
+        "season_start": datetime(2025, 8, 23),  # 2025 season, Week 0 late August (Sat)
         "total_weeks": 16,                       # Including bowl season
         "season_year": 2025,
     },
     "CBB": {
         "input_csv": "db_trades_cbb.csv",
-        "season_start": datetime(2025, 11, 3),  # 2025-26 season starts early Nov
+        "season_start": datetime(2025, 11, 4),  # 2025-26 season starts Tue Nov 4
         "total_weeks": 22,                       # Through March Madness
         "season_year": 2026,
     },
@@ -204,7 +205,7 @@ def normalize_is_correct(value) -> Optional[bool]:
     return None
 
 
-def parse_game_teams(game_str: str) -> Tuple[str, str]:
+def parse_game_teams(game_str) -> Tuple[str, str]:
     """
     Parse 'Team A vs Team B' or 'Team A vs. Team B' into (team_a, team_b).
 
@@ -214,9 +215,14 @@ def parse_game_teams(game_str: str) -> Tuple[str, str]:
     Returns:
         Tuple of (team_a, team_b), or ("", "") if parsing fails
     """
-    if not game_str or " vs" not in game_str.lower():
+    # Type validation - ensure we have a string
+    if not isinstance(game_str, str) or not game_str:
         return ("", "")
-    parts = game_str.replace(" vs. ", " vs ").split(" vs ")
+    if " vs" not in game_str.lower():
+        return ("", "")
+    # Case-insensitive replacement and split
+    normalized = re.sub(r' vs\.? ', ' vs ', game_str, flags=re.IGNORECASE)
+    parts = normalized.split(" vs ")
     if len(parts) == 2:
         return (parts[0].strip(), parts[1].strip())
     return ("", "")

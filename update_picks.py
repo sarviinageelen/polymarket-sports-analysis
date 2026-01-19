@@ -73,7 +73,7 @@ def load_and_transform(input_csv: str) -> pd.DataFrame:
     # Calculate user's entry price for their pick
     # If user_pick matches first team (Team A), use yes_avg_price, else no_avg_price
     def get_pick_price(row):
-        team_a, _ = parse_game_teams(row['game'])
+        team_a, _ = parse_game_teams(row['match_title'])
         if row['user_pick'] == team_a:
             price = row.get('yes_avg_price')
             return price if price is not None and not pd.isna(price) else 0
@@ -137,6 +137,12 @@ def load_and_transform(input_csv: str) -> pd.DataFrame:
     print(f"   Excluded {excluded_users:,} users (< 3 wins)")
     print(f"   Remaining: {df['user_address'].nunique():,} users")
 
+    # Detect duplicate picks (same user, same game)
+    duplicates = df.groupby(['user_address', 'game']).size()
+    duplicate_count = (duplicates > 1).sum()
+    if duplicate_count > 0:
+        print(f"   Warning: {duplicate_count} user-game combinations have multiple picks (using first)")
+
     return df
 
 
@@ -178,10 +184,10 @@ def generate_excel(df: pd.DataFrame, output_file: str, title: str):
     # Calculate games (total picks made)
     stats_df["games"] = stats_df["wins"] + stats_df["losses"] + stats_df["pending"]
 
-    # Calculate win percentage
+    # Calculate win percentage (keep NaN for users with no decided games)
     stats_df["total_decided"] = stats_df["wins"] + stats_df["losses"]
     stats_df["win_pct"] = (100 * stats_df["wins"] / stats_df["total_decided"]).round(1)
-    stats_df["win_pct"] = stats_df["win_pct"].fillna(0)
+    # Don't fill NaN with 0 - users with no decided games should show blank, not 0%
     stats_df = stats_df.drop(columns=["total_decided"])
 
     print(f"   Stats computed in {format_time(time.time() - start_time)}")
@@ -194,11 +200,12 @@ def generate_excel(df: pd.DataFrame, output_file: str, title: str):
 
     # Filter to resolved games only for streak calculation (exclude pending)
     df_resolved = df[df['result'].isin(['won', 'lost'])].copy()
-    # Sort by time descending, then by is_correct_pick ascending (losses first)
-    # This ensures losses break streaks correctly when multiple games have same timestamp
+    # Add original index as stable tiebreaker for deterministic ordering
+    df_resolved['_orig_idx'] = range(len(df_resolved))
+    # Sort by time descending, using original index as tiebreaker for same timestamps
     df_sorted = df_resolved.sort_values(
-        [sort_col, 'is_correct_pick'],
-        ascending=[False, True]  # Most recent first, losses (False) before wins (True)
+        [sort_col, '_orig_idx'],
+        ascending=[False, False]  # Most recent first, original order for same-time games
     )
 
     # Calculate streaks using groupby
@@ -361,8 +368,8 @@ def generate_excel(df: pd.DataFrame, output_file: str, title: str):
     ws = wb.active
     ws.title = title[:31]
 
-    # Define columns to write (order: rank, user_address, games, wins, losses, win_pct, win_streak, last_10, then game columns)
-    stats_cols = ["rank", "user_address", "games", "wins", "losses", "win_pct", "win_streak", "last_10"]
+    # Define columns to write (order: rank, user_address, games, wins, losses, win_pct, win_streak, loss_streak, last_10, then game columns)
+    stats_cols = ["rank", "user_address", "games", "wins", "losses", "win_pct", "win_streak", "loss_streak", "last_10"]
     display_cols = stats_cols + games
     num_stats_cols = len(stats_cols)
 
@@ -378,6 +385,7 @@ def generate_excel(df: pd.DataFrame, output_file: str, title: str):
         "losses": "losses",
         "win_pct": "win %",
         "win_streak": "win streak",
+        "loss_streak": "loss streak",
         "last_10": "last 10",
     }
 
@@ -410,9 +418,11 @@ def generate_excel(df: pd.DataFrame, output_file: str, title: str):
             # Game columns - Team A % formula
             consensus = game_consensus.get(col_name, {})
             team_a = consensus.get('team_a', '')
+            # Escape double quotes for Excel formula
+            team_a_escaped = team_a.replace('"', '""')
             col_letter = get_column_letter(col_idx)
-            # Formula: COUNTIF(range, team_name) / COUNTA(range)
-            formula = f'=COUNTIF({col_letter}{data_start_row}:{col_letter}{data_end_row},"{team_a}")/COUNTA({col_letter}{data_start_row}:{col_letter}{data_end_row})'
+            # Formula: COUNTIF(range, team_name) / COUNTA(range) with IFERROR to handle division by zero
+            formula = f'=IFERROR(COUNTIF({col_letter}{data_start_row}:{col_letter}{data_end_row},"{team_a_escaped}")/COUNTA({col_letter}{data_start_row}:{col_letter}{data_end_row}),"")'
             cell = ws.cell(row=1, column=col_idx, value=formula)
             cell.number_format = '0%'
         cell.alignment = center_align
@@ -435,9 +445,11 @@ def generate_excel(df: pd.DataFrame, output_file: str, title: str):
         else:
             consensus = game_consensus.get(col_name, {})
             team_b = consensus.get('team_b', '')
+            # Escape double quotes for Excel formula
+            team_b_escaped = team_b.replace('"', '""')
             col_letter = get_column_letter(col_idx)
-            # Formula: COUNTIF(range, team_name) / COUNTA(range)
-            formula = f'=COUNTIF({col_letter}{data_start_row}:{col_letter}{data_end_row},"{team_b}")/COUNTA({col_letter}{data_start_row}:{col_letter}{data_end_row})'
+            # Formula: COUNTIF(range, team_name) / COUNTA(range) with IFERROR to handle division by zero
+            formula = f'=IFERROR(COUNTIF({col_letter}{data_start_row}:{col_letter}{data_end_row},"{team_b_escaped}")/COUNTA({col_letter}{data_start_row}:{col_letter}{data_end_row}),"")'
             cell = ws.cell(row=3, column=col_idx, value=formula)
             cell.number_format = '0%'
         cell.alignment = center_align
@@ -480,7 +492,7 @@ def generate_excel(df: pd.DataFrame, output_file: str, title: str):
     games_set = set(games)
 
     # Write data rows (starting at row 7)
-    for row_idx, row_data in enumerate(result_df.itertuples(index=False)):
+    for row_idx in range(total_rows):
         if (row_idx + 1) % 10000 == 0:
             pct = ((row_idx + 1) / total_rows) * 100
             print(f"   Writing row {row_idx + 1:,}/{total_rows:,} ({pct:.1f}%)", end="\r")
@@ -513,8 +525,8 @@ def generate_excel(df: pd.DataFrame, output_file: str, title: str):
     print(f"   Writing row {total_rows:,}/{total_rows:,} (100.0%)")
     print(f"   Excel rows written in {format_time(time.time() - excel_time)}")
 
-    # Add freeze pane after last_10 column and header rows (column I, row 7)
-    ws.freeze_panes = "I7"
+    # Add freeze pane after last_10 column and header rows (column J, row 7)
+    ws.freeze_panes = "J7"
 
     # Set column widths - game columns (I onwards) get minimum width of 10
     for col_idx in range(num_stats_cols + 1, len(display_cols) + 1):
@@ -531,10 +543,10 @@ def generate_excel(df: pd.DataFrame, output_file: str, title: str):
     print("\n" + "="*80)
     print("PREVIEW (Top 10)")
     print("="*80)
-    preview_cols = ["rank", "user_address", "games", "wins", "losses", "win_pct", "last_10"]
+    preview_cols = ["rank", "user_address", "games", "wins", "losses", "win_pct", "loss_streak", "last_10"]
     preview_df = result_df[preview_cols].head(10).copy()
     preview_df["user_address"] = preview_df["user_address"].apply(lambda x: x[:18] + "..." if len(str(x)) > 20 else x)
-    preview_df.columns = ["rank", "user_address", "games", "wins", "losses", "win %", "last 10"]
+    preview_df.columns = ["rank", "user_address", "games", "wins", "losses", "win %", "loss streak", "last 10"]
     print(preview_df.to_string(index=False))
 
     total_time = time.time() - start_time

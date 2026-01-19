@@ -58,15 +58,15 @@ class TestGetWeekDates:
 
     def test_nfl_week_1(self):
         start, end = get_week_dates(1, "NFL")
-        # NFL 2025 season starts Sep 3, Week 1 is Sep 3-10
-        assert start == "2025-09-03"
-        assert end == "2025-09-10"
+        # NFL 2025 season starts Thu Sep 4, Week 1 is Sep 4-11
+        assert start == "2025-09-04"
+        assert end == "2025-09-11"
 
     def test_nfl_week_2(self):
         start, end = get_week_dates(2, "NFL")
-        # Week 2 is Sep 10-17
-        assert start == "2025-09-10"
-        assert end == "2025-09-17"
+        # Week 2 is Sep 11-18
+        assert start == "2025-09-11"
+        assert end == "2025-09-18"
 
     def test_invalid_week_zero(self):
         with pytest.raises(ValueError):
